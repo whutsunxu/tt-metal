@@ -62,10 +62,9 @@ class TestTTNNSiliconOps:
 
         tt_x = ttnn.from_torch(x, device=device, dtype=ttnn_dtype)
         tt_y = ttnn.from_torch(y, device=device, dtype=ttnn_dtype)
-        tt_z = ttnn.concat([tt_x, tt_y], dim=1)
+        tt_z = ttnn.concat([tt_x, tt_y], dim=cat_dim)
 
-        back_tt_z = tt_z.cpu()
-        back_torch_tt_z = back_tt_z.to_torch().to(torch_dtype)
+        back_torch_tt_z = ttnn.to_torch(tt_z)
 
         # print("x: ", x, "\ny: ", y, "\nz: ", z)
         # print("tt_x: ", tt_x, "\ntt_y: ", tt_y, "\ntt_z: ", tt_z)
@@ -74,6 +73,32 @@ class TestTTNNSiliconOps:
 
         del tt_x
         del tt_y
+        del tt_z
+        return eq
+
+    def concat_3_tensors_test_instance(
+        self, tensor_dims0, tensor_dims1, tensor_dims2, cat_dim, torch_dtype, ttnn_dtype, device
+    ):
+        x0 = torch.randn(tensor_dims0).to(torch_dtype)
+        x1 = torch.randn(tensor_dims1).to(torch_dtype)
+        x2 = torch.randn(tensor_dims2).to(torch_dtype)
+        z = torch.concat([x0, x1, x2], dim=cat_dim)
+
+        tt_x0 = ttnn.from_torch(x0, device=device, dtype=ttnn_dtype)
+        tt_x1 = ttnn.from_torch(x1, device=device, dtype=ttnn_dtype)
+        tt_x2 = ttnn.from_torch(x2, device=device, dtype=ttnn_dtype)
+        tt_z = ttnn.concat([tt_x0, tt_x1, tt_x2], dim=cat_dim)
+
+        back_torch_tt_z = ttnn.to_torch(tt_z)
+
+        # print("x: ", x, "\ny: ", y, "\nz: ", z)
+        # print("tt_x: ", tt_x, "\ntt_y: ", tt_y, "\ntt_z: ", tt_z)
+
+        eq = torch.equal(z, back_torch_tt_z)
+
+        del tt_x0
+        del tt_x1
+        del tt_x2
         del tt_z
         return eq
 
@@ -105,6 +130,11 @@ class TestTTNNSiliconOps:
         tensor_dims1 = (batch_size, label_len, enc_in)
         eq1 = self.concat_test_instance(tensor_dims1, cat_dim, torch_dtype, ttnn_dtype, device)
         assert eq1
+
+        eq2 = self.concat_3_tensors_test_instance(
+            tensor_dims0, tensor_dims1, tensor_dims0, cat_dim, torch_dtype, ttnn_dtype, device
+        )
+        assert eq2
 
         ttnn.device.CloseDevice(device)
 
