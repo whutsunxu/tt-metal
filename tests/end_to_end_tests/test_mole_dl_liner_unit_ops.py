@@ -334,3 +334,66 @@ class TestTTNNSiliconOps:
 
         ttnn.device.CloseDevice(device)
         return
+
+    @pytest.mark.skip(reason="Skipping test_avgpool1d temporarily, because it will coredump")
+    def test_avgpool1d(reset_seeds, first_grayskull_device, models_params, set_tolerance):
+        device = first_grayskull_device
+
+        (
+            seq_len,
+            label_len,
+            pred_len,
+            stride,
+            kernel_size,
+            d_model,
+            n_heads,
+            batch_size,
+            enc_in,
+            udefined_v,
+            t_dim,
+            torch_dtype,
+            ttnn_dtype,
+        ) = models_params
+
+        (rtol, atol) = set_tolerance
+
+        tensor_dims_NCH = (batch_size, enc_in, seq_len + ((kernel_size - 1) // 2) * 2)
+        tensor_dims_NHWC = (batch_size, seq_len + ((kernel_size - 1) // 2) * 2, 1, enc_in)
+
+        """--------------------- call torch avg_pool1d -------------------------------"""
+        padding = 0
+        avg_pool = torch.nn.AvgPool1d(kernel_size=kernel_size, stride=stride, padding=padding)
+
+        x = torch.randn(tensor_dims_NCH).to(torch_dtype)  # N C H
+        y = avg_pool(x)  ## N C H
+
+        """--------------------- call ttnn avg_pool2d -------------------------------"""
+        x_2d = torch.unsqueeze(x, -1)  ## N, C, H --> N, C, H, 1
+        x_NHWC = torch.permute(x_2d, (0, 2, 3, 1))  ## N, C, H, 1 --> N, H, 1, C
+        tt_x = ttnn.from_torch(x_NHWC, layout=ttnn.ROW_MAJOR_LAYOUT, device=device, dtype=ttnn_dtype)
+
+        tt_y = ttnn.avg_pool2d(
+            input_tensor=tt_x,
+            batch_size=tensor_dims_NHWC[0],
+            input_h=tensor_dims_NHWC[1],
+            input_w=tensor_dims_NHWC[2],
+            channels=tensor_dims_NHWC[3],
+            kernel_size=[kernel_size, 1],
+            stride=[1, 1],
+            padding=[0, 0, 0, 0],
+            output_layout=ttnn.ROW_MAJOR_LAYOUT,
+            dtype=ttnn.bfloat16,
+        )
+
+        back_torch_tt_y_NHWC = ttnn.to_torch(tt_y)  ## N, H, 1, C
+        ## N, H, 1, C --> N, H, C
+        back_torch_tt_y_NHC = torch.squeeze(back_torch_tt_y_NHWC.to(torch_dtype), dim=2)
+        ## N, H, C --> N, C, H
+        back_torch_tt_y = torch.permute(back_torch_tt_y_NHC, (0, 2, 1))
+        print("y: ", y, "\ntt_y: ", tt_y)
+
+        del tt_x
+        del tt_y
+
+        assert torch.allclose(y, back_torch_tt_y, rtol=rtol, atol=atol, equal_nan=False)
+        return
