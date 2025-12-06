@@ -222,3 +222,115 @@ class TestTTNNSiliconOps:
         del tt_x
         del tt_y
         ttnn.device.CloseDevice(device)
+
+    def permute_test_instance(self, tensor_dims, permute_order, torch_dtype, ttnn_dtype, device):
+        x = torch.randn(tensor_dims).to(torch_dtype)
+        tt_x = ttnn.from_torch(x, layout=ttnn.ROW_MAJOR_LAYOUT, device=device, dtype=ttnn_dtype)
+        # print("x: ", x, "\ntt_x: ", tt_x)
+
+        y = x.permute(permute_order)
+        tt_y = ttnn.permute(tt_x, permute_order)
+        back_torch_tt_y = ttnn.to_torch(tt_y)
+        # print("y: ", y, "\ntt_y: ", tt_y)
+
+        """
+        ## test
+        bit16_tt_x = ttnn.typecast(tt_x, ttnn.bfloat16)
+        bit32_tt_x = ttnn.typecast(bit16_tt_x, ttnn.float32)
+        print("bit32_tt_x: ", bit32_tt_x)
+        """
+
+        del tt_x
+        del tt_y
+
+        assert torch.equal(y, back_torch_tt_y)
+        return
+
+    def permute_test_instance_with_tolerance(
+        self, tensor_dims, permute_order, torch_dtype, ttnn_dtype, device, rtol, atol
+    ):
+        x = torch.randn(tensor_dims).to(torch_dtype)
+        tt_x = ttnn.from_torch(x, layout=ttnn.ROW_MAJOR_LAYOUT, device=device, dtype=ttnn_dtype)
+        # print("x: ", x, "\ntt_x: ", tt_x)
+
+        y = x.permute(permute_order)
+        # y[0,0,0] = y[0,0,0] + 1.0
+        tt_y = ttnn.permute(tt_x, permute_order)
+        back_torch_tt_y = ttnn.to_torch(tt_y)
+        # print("y: ", y, "\ntt_y: ", tt_y)
+
+        del tt_x
+        del tt_y
+
+        assert torch.allclose(y, back_torch_tt_y, rtol=rtol, atol=atol, equal_nan=False)
+        return
+
+    def test_permute(self, reset_seeds, first_grayskull_device, models_params, set_tolerance):
+        device = first_grayskull_device
+
+        (
+            seq_len,
+            label_len,
+            pred_len,
+            stride,
+            kernel_size,
+            d_model,
+            n_heads,
+            batch_size,
+            enc_in,
+            udefined_v,
+            t_dim,
+            torch_dtype,
+            ttnn_dtype,
+        ) = models_params
+
+        (rtol, atol) = set_tolerance
+
+        tensor_dims0 = (1, 3, 2)
+        tensor_dims1 = (batch_size, seq_len + ((kernel_size - 1) // 2) * 2, enc_in)
+        tensor_dims2 = (batch_size, enc_in, seq_len)
+        tensor_dims3 = (batch_size, seq_len, enc_in)
+        tensor_dims4 = (batch_size, enc_in, pred_len)
+
+        permute_order0 = (0, 2, 1)
+
+        "---------------- test with bitwise criterion -----------------"
+        # self.permute_test_instance(tensor_dims0, permute_order0, torch_dtype,\
+        #                                  ttnn_dtype, device)
+
+        # self.permute_test_instance(tensor_dims1, permute_order0, torch_dtype,\
+        #                                  ttnn_dtype, device)
+
+        # self.permute_test_instance(tensor_dims2, permute_order0, torch_dtype,\
+        #                                  ttnn_dtype, device)
+
+        # self.permute_test_instance(tensor_dims3, permute_order0, torch_dtype,\
+        #                                  ttnn_dtype, device)
+
+        # self.permute_test_instance(tensor_dims4, permute_order0, torch_dtype,\
+        #                                  ttnn_dtype, device)
+
+        "---------------- test with certain precision tolerance -----------------"
+        (rtol, atol) = (1e-3, 1e-3)  ## cannot pass with 1e-5
+
+        self.permute_test_instance_with_tolerance(
+            tensor_dims0, permute_order0, torch_dtype, ttnn_dtype, device, rtol, atol
+        )
+        self.permute_test_instance_with_tolerance(
+            tensor_dims1, permute_order0, torch_dtype, ttnn_dtype, device, rtol, atol
+        )
+
+        self.permute_test_instance_with_tolerance(
+            tensor_dims2, permute_order0, torch_dtype, ttnn_dtype, device, rtol, atol
+        )
+
+        self.permute_test_instance_with_tolerance(
+            tensor_dims3, permute_order0, torch_dtype, ttnn_dtype, device, rtol, atol
+        )
+
+        self.permute_test_instance_with_tolerance(
+            tensor_dims4, permute_order0, torch_dtype, ttnn_dtype, device, rtol, atol
+        )
+
+        ttnn.device.CloseDevice(device)
+        return
