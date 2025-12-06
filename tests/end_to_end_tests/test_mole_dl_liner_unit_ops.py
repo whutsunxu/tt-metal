@@ -155,3 +155,40 @@ class TestTTNNSiliconOps:
         assert eq1
 
         ttnn.device.CloseDevice(device)
+
+    def test_repeat(reset_seeds, first_grayskull_device, models_params):
+        device = first_grayskull_device
+
+        (
+            seq_len,
+            label_len,
+            pred_len,
+            stride,
+            kernel_size,
+            d_model,
+            n_heads,
+            batch_size,
+            enc_in,
+            udefined_v,
+            t_dim,
+            torch_dtype,
+            ttnn_dtype,
+        ) = models_params
+
+        tensor_dims = (batch_size, 1, enc_in)
+
+        x = torch.randn(tensor_dims).to(torch_dtype)
+        tt_x = ttnn.from_torch(x, layout=ttnn.ROW_MAJOR_LAYOUT, device=device, dtype=ttnn_dtype)
+
+        y = x.repeat(1, (kernel_size - 1) // 2, 1)
+        tt_y = ttnn.repeat(tt_x, (1, (kernel_size - 1) // 2, 1))
+        # print("y: ", y, "\ntt_y: ", tt_y)
+
+        back_torch_tt_y = ttnn.to_torch(tt_y)
+
+        eq = torch.equal(y, back_torch_tt_y)
+        assert eq
+
+        del tt_x
+        del tt_y
+        ttnn.device.CloseDevice(device)
