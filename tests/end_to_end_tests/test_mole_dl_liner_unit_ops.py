@@ -396,4 +396,123 @@ class TestTTNNSiliconOps:
         del tt_y
 
         assert torch.allclose(y, back_torch_tt_y, rtol=rtol, atol=atol, equal_nan=False)
+        ttnn.device.CloseDevice(device)
+        return
+
+    def test_binary_op(reset_seeds, first_grayskull_device, models_params, set_tolerance):
+        device = first_grayskull_device
+
+        (
+            seq_len,
+            label_len,
+            pred_len,
+            stride,
+            kernel_size,
+            d_model,
+            n_heads,
+            batch_size,
+            enc_in,
+            udefined_v,
+            t_dim,
+            torch_dtype,
+            ttnn_dtype,
+        ) = models_params
+
+        (rtol, atol) = set_tolerance
+        rtol = 1e-2
+        atol = 1e-2
+
+        tensor_dims0 = (batch_size, seq_len, enc_in)
+        # tensor_dims0 = (2, 3, 4)
+
+        x0 = torch.randn(tensor_dims0).to(torch_dtype)
+        y0 = torch.randn(tensor_dims0).to(torch_dtype)
+
+        z0 = x0 - y0
+        z1 = x0 + y0
+
+        tt_x0 = ttnn.from_torch(x0, device=device, dtype=ttnn_dtype)
+        tt_y0 = ttnn.from_torch(y0, device=device, dtype=ttnn_dtype)
+
+        tt_z0 = tt_x0 - tt_y0
+        tt_z1 = tt_x0 + tt_y0
+
+        back_torch_tt_z0 = ttnn.to_torch(tt_z0)
+        back_torch_tt_z1 = ttnn.to_torch(tt_z1)
+
+        del tt_z0
+        del tt_z1
+
+        # assert torch.allclose(z0, back_torch_tt_z0, rtol=rtol, atol=atol, equal_nan=False)
+        try:
+            # Assert tensors are close (strict tolerance)
+            torch.testing.assert_close(z0, back_torch_tt_z0, rtol=rtol, atol=atol, equal_nan=False)
+        except AssertionError as e:
+            # Print the detailed mismatch log
+            print("Mismatch details for t0:\n", e)
+            assert False
+        # assert torch.allclose(z1, back_torch_tt_z1, rtol=rtol, atol=atol, equal_nan=False)
+
+        try:
+            # Assert tensors are close (strict tolerance)
+            torch.testing.assert_close(z1, back_torch_tt_z1, rtol=rtol, atol=atol, equal_nan=False)
+        except AssertionError as e:
+            # Print the detailed mismatch log
+            print("Mismatch details for t1:\n", e)
+            assert False
+
+        ttnn.device.CloseDevice(device)
+        return
+
+    def reshape_test_instance(self, tensor_dims, target_dims, torch_dtype, ttnn_dtype, device):
+        x0 = torch.randn(tensor_dims).to(torch_dtype)
+        y0 = x0.reshape(target_dims)
+
+        tt_x0 = ttnn.from_torch(x0, device=device, dtype=ttnn_dtype)
+        tt_y0 = ttnn.reshape(tt_x0, target_dims)
+
+        back_torch_tt_y0 = ttnn.to_torch(tt_y0)
+
+        del tt_x0
+        del tt_y0
+
+        assert torch.equal(y0, back_torch_tt_y0)
+        return
+
+    def test_reshape(self, reset_seeds, first_grayskull_device, models_params):
+        device = first_grayskull_device
+
+        (
+            seq_len,
+            label_len,
+            pred_len,
+            stride,
+            kernel_size,
+            d_model,
+            n_heads,
+            batch_size,
+            enc_in,
+            udefined_v,
+            t_dim,
+            torch_dtype,
+            ttnn_dtype,
+        ) = models_params
+
+        tensor_dims0 = (batch_size, 1, t_dim * enc_in)
+        target_dims0 = (batch_size * enc_in, t_dim)
+        self.reshape_test_instance(tensor_dims0, target_dims0, torch_dtype, ttnn_dtype, device)
+
+        tensor_dims1 = (batch_size, seq_len, enc_in)
+        target_dims1 = (int((batch_size * seq_len * enc_in) / (pred_len * t_dim)), pred_len, t_dim)
+        self.reshape_test_instance(tensor_dims1, target_dims1, torch_dtype, ttnn_dtype, device)
+
+        tensor_dims2 = (batch_size * enc_in, pred_len, 1)
+        target_dims2 = (batch_size, enc_in, pred_len)
+        self.reshape_test_instance(tensor_dims2, target_dims2, torch_dtype, ttnn_dtype, device)
+
+        tensor_dims2 = (batch_size * enc_in, pred_len, 1)
+        target_dims2 = (batch_size, enc_in, pred_len)
+        self.reshape_test_instance(tensor_dims2, target_dims2, torch_dtype, ttnn_dtype, device)
+
+        ttnn.device.CloseDevice(device)
         return
