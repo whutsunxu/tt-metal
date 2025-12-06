@@ -107,3 +107,51 @@ class TestTTNNSiliconOps:
         assert eq1
 
         ttnn.device.CloseDevice(device)
+
+    def slice_test_instance(self, tensor_dims, torch_dtype, ttnn_dtype, device):
+        x = torch.randn(tensor_dims).to(torch_dtype)
+        tt_x = ttnn.from_torch(x, layout=ttnn.TILE_LAYOUT, device=device, dtype=ttnn_dtype)
+        # print("x: ", x, "\ntt_x: ", tt_x)
+
+        y = x[:, 0:1, :]
+        tt_y = ttnn.slice(
+            tt_x, slice_start=(0, 0, 0), slice_end=(tensor_dims[0], 1, tensor_dims[2]), slice_step=(1, 1, 1)
+        )
+        back_torch_tt_y = ttnn.to_torch(tt_y)
+        # print("y: ", y, "\ntt_y: ", tt_y, "\nback_torch_tt_y: ", back_torch_tt_y)
+
+        eq = torch.equal(y, back_torch_tt_y)
+
+        del tt_x
+        del tt_y
+
+        return eq
+
+    def test_slice(self, reset_seeds, first_grayskull_device, models_params):
+        device = first_grayskull_device
+
+        (
+            seq_len,
+            label_len,
+            pred_len,
+            stride,
+            kernel_size,
+            d_model,
+            n_heads,
+            batch_size,
+            enc_in,
+            udefined_v,
+            t_dim,
+            torch_dtype,
+            ttnn_dtype,
+        ) = models_params
+
+        tensor_dims0 = (batch_size, seq_len, udefined_v)
+        eq0 = self.slice_test_instance(tensor_dims0, torch_dtype, ttnn_dtype, device)
+        assert eq0
+
+        tensor_dims1 = (batch_size, seq_len, enc_in)
+        eq1 = self.slice_test_instance(tensor_dims1, torch_dtype, ttnn_dtype, device)
+        assert eq1
+
+        ttnn.device.CloseDevice(device)
